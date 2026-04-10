@@ -94,7 +94,7 @@ class TestProviderRegistry:
         assert pconfig.base_url_env_var == "HF_BASE_URL"
 
     def test_base_urls(self):
-        assert PROVIDER_REGISTRY["copilot"].inference_base_url == "https://api.githubcopilot.com"
+        assert PROVIDER_REGISTRY["copilot"].inference_base_url == "https://api.enterprise.githubcopilot.com"
         assert PROVIDER_REGISTRY["copilot-acp"].inference_base_url == "acp://copilot"
         assert PROVIDER_REGISTRY["zai"].inference_base_url == "https://api.z.ai/api/paas/v4"
         assert PROVIDER_REGISTRY["kimi-coding"].inference_base_url == "https://api.moonshot.ai/v1"
@@ -308,7 +308,7 @@ class TestApiKeyProviderStatus:
         assert status["configured"] is True
         assert status["logged_in"] is True
         assert status["key_source"] == "gh auth token"
-        assert status["base_url"] == "https://api.githubcopilot.com"
+        assert status["base_url"] == "https://api.enterprise.githubcopilot.com"
 
     def test_get_auth_status_dispatches_to_api_key(self, monkeypatch):
         monkeypatch.setenv("MINIMAX_API_KEY", "mm-key")
@@ -362,7 +362,7 @@ class TestResolveApiKeyProviderCredentials:
         creds = resolve_api_key_provider_credentials("copilot")
         assert creds["provider"] == "copilot"
         assert creds["api_key"] == "gh-env-secret"
-        assert creds["base_url"] == "https://api.githubcopilot.com"
+        assert creds["base_url"] == "https://api.enterprise.githubcopilot.com"
         assert creds["source"] == "GITHUB_TOKEN"
 
     def test_resolve_copilot_with_gh_cli_fallback(self, monkeypatch):
@@ -370,7 +370,7 @@ class TestResolveApiKeyProviderCredentials:
         creds = resolve_api_key_provider_credentials("copilot")
         assert creds["provider"] == "copilot"
         assert creds["api_key"] == "gho_cli_secret"
-        assert creds["base_url"] == "https://api.githubcopilot.com"
+        assert creds["base_url"] == "https://api.enterprise.githubcopilot.com"
         assert creds["source"] == "gh auth token"
 
     def test_try_gh_cli_token_uses_homebrew_path_when_not_on_path(self, monkeypatch):
@@ -548,7 +548,7 @@ class TestRuntimeProviderResolution:
         assert result["provider"] == "copilot"
         assert result["api_mode"] == "chat_completions"
         assert result["api_key"] == "gho_cli_secret"
-        assert result["base_url"] == "https://api.githubcopilot.com"
+        assert result["base_url"] == "https://api.enterprise.githubcopilot.com"
 
     def test_runtime_copilot_uses_responses_for_gpt_5_4(self, monkeypatch):
         monkeypatch.setattr("hermes_cli.copilot_auth._try_gh_cli_token", lambda: "gho_cli_secret")
@@ -634,8 +634,10 @@ class TestHasAnyProviderConfigured:
         monkeypatch.setattr(config_module, "get_hermes_home", lambda: hermes_home)
         # Clear all provider env vars so earlier checks don't short-circuit
         for var in ("OPENROUTER_API_KEY", "OPENAI_API_KEY", "ANTHROPIC_API_KEY",
-                     "ANTHROPIC_TOKEN", "OPENAI_BASE_URL"):
+                     "ANTHROPIC_TOKEN", "OPENAI_BASE_URL", "GITHUB_TOKEN"):
             monkeypatch.delenv(var, raising=False)
+        # Block gh CLI fallback so copilot doesn't resolve either
+        monkeypatch.setattr("hermes_cli.copilot_auth._try_gh_cli_token", lambda: None)
         # Simulate valid Claude Code credentials
         monkeypatch.setattr(
             "agent.anthropic_adapter.read_claude_code_credentials",
@@ -720,8 +722,9 @@ class TestHasAnyProviderConfigured:
         monkeypatch.setattr(config_module, "get_hermes_home", lambda: hermes_home)
         monkeypatch.setenv("HERMES_HOME", str(hermes_home))
         for var in ("OPENROUTER_API_KEY", "OPENAI_API_KEY", "ANTHROPIC_API_KEY",
-                     "ANTHROPIC_TOKEN", "OPENAI_BASE_URL"):
+                     "ANTHROPIC_TOKEN", "OPENAI_BASE_URL", "GITHUB_TOKEN"):
             monkeypatch.delenv(var, raising=False)
+        monkeypatch.setattr("hermes_cli.copilot_auth._try_gh_cli_token", lambda: None)
         from hermes_cli.main import _has_any_provider_configured
         assert _has_any_provider_configured() is False
 

@@ -769,7 +769,7 @@ class AIAgent:
                         "X-OpenRouter-Title": "Hermes Agent",
                         "X-OpenRouter-Categories": "productivity,cli-agent",
                     }
-                elif "api.githubcopilot.com" in effective_base.lower():
+                elif "githubcopilot.com" in effective_base.lower():
                     from hermes_cli.models import copilot_default_headers
 
                     client_kwargs["default_headers"] = copilot_default_headers()
@@ -789,9 +789,17 @@ class AIAgent:
                         "api_key": _routed_client.api_key,
                         "base_url": str(_routed_client.base_url),
                     }
-                    # Preserve any default_headers the router set
-                    if hasattr(_routed_client, '_default_headers') and _routed_client._default_headers:
-                        client_kwargs["default_headers"] = dict(_routed_client._default_headers)
+                    # Preserve any default_headers the router set.
+                    # OpenAI client instances may expose these as `default_headers`
+                    # and/or `_custom_headers` rather than `_default_headers`.
+                    routed_headers = None
+                    for attr in ("_default_headers", "default_headers", "_custom_headers"):
+                        value = getattr(_routed_client, attr, None)
+                        if value:
+                            routed_headers = dict(value)
+                            break
+                    if routed_headers:
+                        client_kwargs["default_headers"] = routed_headers
                 else:
                     # When the user explicitly chose a non-OpenRouter provider
                     # but no credentials were found, fail fast with a clear
@@ -3781,9 +3789,29 @@ class AIAgent:
         primary_client = self._ensure_primary_openai_client(reason=reason)
         if isinstance(primary_client, Mock):
             return primary_client
+        self._maybe_refresh_copilot_token()
         with self._openai_client_lock():
             request_kwargs = dict(self._client_kwargs)
         return self._create_openai_client(request_kwargs, reason=reason, shared=False)
+
+    def _maybe_refresh_copilot_token(self) -> None:
+        """Refresh Copilot bearer token in _client_kwargs if expiring soon.
+
+        Copilot tokens (tid=...) expire ~30min.  exchange_copilot_token() has
+        its own in-memory cache and only hits the network when <60s remain,
+        so calling this on every request is effectively free.
+        """
+        if self.provider != "copilot":
+            return
+        try:
+            from hermes_cli.copilot_auth import exchange_copilot_token
+            fresh = exchange_copilot_token()
+            with self._openai_client_lock():
+                if self._client_kwargs.get("api_key") != fresh:
+                    self._client_kwargs["api_key"] = fresh
+                    logger.debug("Copilot token refreshed in _client_kwargs")
+        except Exception as exc:
+            logger.debug("Copilot token refresh skipped: %s", exc)
 
     def _close_request_openai_client(self, client: Any, *, reason: str) -> None:
         self._close_openai_client(client, reason=reason, shared=False)
@@ -4097,7 +4125,7 @@ class AIAgent:
         normalized = (base_url or "").lower()
         if "openrouter" in normalized:
             self._client_kwargs["default_headers"] = dict(_OR_HEADERS)
-        elif "api.githubcopilot.com" in normalized:
+        elif "githubcopilot.com" in normalized:
             from hermes_cli.models import copilot_default_headers
 
             self._client_kwargs["default_headers"] = copilot_default_headers()
@@ -5348,7 +5376,7 @@ class AIAgent:
 
             is_github_responses = (
                 "models.github.ai" in self.base_url.lower()
-                or "api.githubcopilot.com" in self.base_url.lower()
+                or "githubcopilot.com" in self.base_url.lower()
             )
 
             # Resolve reasoning effort: config > default (medium)
@@ -5502,7 +5530,7 @@ class AIAgent:
         _is_openrouter = self._is_openrouter_url()
         _is_github_models = (
             "models.github.ai" in self._base_url_lower
-            or "api.githubcopilot.com" in self._base_url_lower
+            or "githubcopilot.com" in self._base_url_lower
         )
 
         # Provider preferences (only, ignore, order, sort) are OpenRouter-
@@ -5571,7 +5599,7 @@ class AIAgent:
             return True
         if "ai-gateway.vercel.sh" in self._base_url_lower:
             return True
-        if "models.github.ai" in self._base_url_lower or "api.githubcopilot.com" in self._base_url_lower:
+        if "models.github.ai" in self._base_url_lower or "githubcopilot.com" in self._base_url_lower:
             try:
                 from hermes_cli.models import github_model_reasoning_efforts
 
