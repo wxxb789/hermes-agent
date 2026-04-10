@@ -14,7 +14,7 @@ import urllib.error
 from difflib import get_close_matches
 from typing import Any, Optional
 
-COPILOT_BASE_URL = "https://api.githubcopilot.com"
+COPILOT_BASE_URL = "https://api.enterprise.githubcopilot.com"
 COPILOT_MODELS_URL = f"{COPILOT_BASE_URL}/models"
 COPILOT_EDITOR_VERSION = "vscode/1.104.1"
 COPILOT_REASONING_EFFORTS_GPT5 = ["minimal", "low", "medium", "high"]
@@ -1336,8 +1336,8 @@ def fetch_github_model_catalog(
 def _is_github_models_base_url(base_url: Optional[str]) -> bool:
     normalized = (base_url or "").strip().rstrip("/").lower()
     return (
-        normalized.startswith(COPILOT_BASE_URL)
-        or normalized.startswith("https://models.github.ai/inference")
+        "githubcopilot.com" in normalized
+        or "models.github.ai" in normalized
     )
 
 
@@ -1623,7 +1623,7 @@ def probe_api_models(
     headers: dict[str, str] = {}
     if api_key:
         headers["Authorization"] = f"Bearer {api_key}"
-    if normalized.startswith(COPILOT_BASE_URL):
+    if "githubcopilot.com" in normalized:
         headers.update(copilot_default_headers())
 
     for candidate_base, is_fallback in candidates:

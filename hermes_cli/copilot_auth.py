@@ -30,7 +30,14 @@ from typing import Optional
 logger = logging.getLogger(__name__)
 
 # OAuth device code flow constants (same client ID as opencode/Copilot CLI)
-COPILOT_OAUTH_CLIENT_ID = "Ov23li8tweQw6odWQebz"
+COPILOT_OAUTH_CLIENT_ID="Ov23li...Qebz"
+COPILOT_DEVICE_CODE_URL = "https://github.com/login/device/code"
+COPILOT_ACCESS_TOKEN_URL="https:...oken"
+
+# Copilot API constants
+COPILOT_TOKEN_EXCHANGE_URL="https:...oken"
+COPILOT_API_BASE_URL = "https://api.enterprise.githubcopilot.com"
+
 # Token type prefixes
 _CLASSIC_PAT_PREFIX = "ghp_"
 _SUPPORTED_PREFIXES = ("gho_", "github_pat_", "ghu_")
@@ -257,6 +264,49 @@ def copilot_device_code_login(
     print()
     print("  ✗ Timed out waiting for authorization.")
     return None
+
+
+# ─── Copilot Token Exchange ────────────────────────────────────────────────
+
+# Cache: (exchanged_token, expiry_timestamp)
+_exchange_cache: tuple[str, float] = ("", 0.0)
+
+
+def exchange_copilot_token(github_token: Optional[str] = None) -> str:
+    """Exchange a GitHub token for a short-lived Copilot API bearer token."""
+    global _exchange_cache
+    import urllib.request
+
+    now = time.time()
+    cached_token, cached_expiry = _exchange_cache
+    if cached_token and now < cached_expiry - 60:
+        return cached_token
+
+    if not github_token:
+        github_token, _ = resolve_copilot_token()
+    if not github_token:
+        raise ValueError("No GitHub token available for Copilot token exchange")
+
+    req = urllib.request.Request(
+        COPILOT_TOKEN_EXCHANGE_URL,
+        headers={
+            "Authorization": f"token {github_token}",
+            "Accept": "application/json",
+            "Editor-Version": "vscode/1.104.1",
+            "User-Agent": "HermesAgent/1.0",
+        },
+    )
+    with urllib.request.urlopen(req, timeout=10) as resp:
+        data = json.loads(resp.read().decode())
+
+    token = data.get("token", "")
+    expires_at = data.get("expires_at", 0)
+    if not token:
+        raise ValueError("Copilot token exchange returned empty token")
+
+    _exchange_cache = (token, float(expires_at))
+    logger.debug("Copilot token exchanged, expires_at=%s", expires_at)
+    return token
 
 
 # ─── Copilot API Headers ───────────────────────────────────────────────────

@@ -261,11 +261,11 @@ class TestFetchApiModels:
                 return b'{"data": [{"id": "gpt-5.4", "model_picker_enabled": true, "supported_endpoints": ["/responses"], "capabilities": {"type": "chat", "supports": {"reasoning_effort": ["low", "medium", "high"]}}}, {"id": "claude-sonnet-4.6", "model_picker_enabled": true, "supported_endpoints": ["/chat/completions"], "capabilities": {"type": "chat", "supports": {"reasoning_effort": ["low", "medium", "high"]}}}, {"id": "text-embedding-3-small", "model_picker_enabled": true, "capabilities": {"type": "embedding"}}]}'
 
         with patch("hermes_cli.models.urllib.request.urlopen", return_value=_Resp()) as mock_urlopen:
-            probe = probe_api_models("gh-token", "https://api.githubcopilot.com")
+            probe = probe_api_models("gh-token", "https://api.enterprise.githubcopilot.com")
 
-        assert mock_urlopen.call_args[0][0].full_url == "https://api.githubcopilot.com/models"
+        assert mock_urlopen.call_args[0][0].full_url == "https://api.enterprise.githubcopilot.com/models"
         assert probe["models"] == ["gpt-5.4", "claude-sonnet-4.6"]
-        assert probe["resolved_base_url"] == "https://api.githubcopilot.com"
+        assert probe["resolved_base_url"] == "https://api.enterprise.githubcopilot.com"
         assert probe["used_fallback"] is False
 
     def test_fetch_github_model_catalog_filters_non_chat_models(self):

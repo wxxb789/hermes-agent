@@ -728,7 +728,7 @@ class TestAuxiliaryPoolAwareness:
                 return_value={
                     "provider": "copilot",
                     "api_key": "gh-cli-token",
-                    "base_url": "https://api.githubcopilot.com",
+                    "base_url": "https://api.enterprise.githubcopilot.com",
                     "source": "gh auth token",
                 },
             ),
@@ -740,7 +740,7 @@ class TestAuxiliaryPoolAwareness:
         assert model == "gpt-5.4"
         call_kwargs = mock_openai.call_args.kwargs
         assert call_kwargs["api_key"] == "gh-cli-token"
-        assert call_kwargs["base_url"] == "https://api.githubcopilot.com"
+        assert call_kwargs["base_url"] == "https://api.enterprise.githubcopilot.com"
         assert call_kwargs["default_headers"]["Editor-Version"]
 
     def test_vision_auto_prefers_active_provider_over_openrouter(self, monkeypatch):

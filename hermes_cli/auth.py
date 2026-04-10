@@ -68,7 +68,7 @@ ACCESS_TOKEN_REFRESH_SKEW_SECONDS = 120       # refresh 2 min before expiry
 DEVICE_AUTH_POLL_INTERVAL_CAP_SECONDS = 1     # poll at most every 1s
 DEFAULT_CODEX_BASE_URL = "https://chatgpt.com/backend-api/codex"
 DEFAULT_QWEN_BASE_URL = "https://portal.qwen.ai/v1"
-DEFAULT_GITHUB_MODELS_BASE_URL = "https://api.githubcopilot.com"
+DEFAULT_GITHUB_MODELS_BASE_URL = "https://api.enterprise.githubcopilot.com"
 DEFAULT_COPILOT_ACP_BASE_URL = "acp://copilot"
 CODEX_OAUTH_CLIENT_ID = "app_EMoamEEZ73f0CkXaXp7hrann"
 CODEX_OAUTH_TOKEN_URL = "https://auth.openai.com/oauth/token"
@@ -342,10 +342,16 @@ def _resolve_api_key_provider_secret(
     if provider_id == "copilot":
         # Use the dedicated copilot auth module for proper token validation
         try:
-            from hermes_cli.copilot_auth import resolve_copilot_token
-            token, source = resolve_copilot_token()
-            if token:
-                return token, source
+            from hermes_cli.copilot_auth import resolve_copilot_token, exchange_copilot_token
+            github_token, source = resolve_copilot_token()
+            if github_token:
+                # Exchange raw GitHub token for short-lived Copilot API bearer token
+                try:
+                    api_token = exchange_copilot_token(github_token)
+                    return api_token, source
+                except Exception as exc:
+                    logger.warning("Copilot token exchange failed: %s", exc)
+                    return github_token, source
         except ValueError as exc:
             logger.warning("Copilot token validation failed: %s", exc)
         except Exception:

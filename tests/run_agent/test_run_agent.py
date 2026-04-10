@@ -889,14 +889,14 @@ class TestBuildApiKwargs:
         assert kwargs["extra_body"]["reasoning"]["effort"] == "medium"
 
     def test_reasoning_sent_for_copilot_gpt5(self, agent):
-        agent.base_url = "https://api.githubcopilot.com"
+        agent.base_url = "https://api.enterprise.githubcopilot.com"
         agent.model = "gpt-5.4"
         messages = [{"role": "user", "content": "hi"}]
         kwargs = agent._build_api_kwargs(messages)
         assert kwargs["extra_body"]["reasoning"] == {"effort": "medium"}
 
     def test_reasoning_xhigh_normalized_for_copilot(self, agent):
-        agent.base_url = "https://api.githubcopilot.com"
+        agent.base_url = "https://api.enterprise.githubcopilot.com"
         agent.model = "gpt-5.4"
         agent.reasoning_config = {"enabled": True, "effort": "xhigh"}
         messages = [{"role": "user", "content": "hi"}]
@@ -904,7 +904,7 @@ class TestBuildApiKwargs:
         assert kwargs["extra_body"]["reasoning"] == {"effort": "high"}
 
     def test_reasoning_omitted_for_non_reasoning_copilot_model(self, agent):
-        agent.base_url = "https://api.githubcopilot.com"
+        agent.base_url = "https://api.enterprise.githubcopilot.com"
         agent.model = "gpt-4.1"
         messages = [{"role": "user", "content": "hi"}]
         kwargs = agent._build_api_kwargs(messages)
@@ -2915,6 +2915,37 @@ class TestFallbackAnthropicProvider:
         assert result is True
         assert agent.api_mode == "chat_completions"
         assert agent.client is mock_client
+
+
+def test_aiagent_preserves_routed_copilot_headers():
+    mock_client = SimpleNamespace(
+        base_url="https://api.enterprise.githubcopilot.com",
+        api_key="tid=test-token",
+        default_headers={
+            "Editor-Version": "vscode/1.104.1",
+            "Openai-Intent": "conversation-edits",
+            "x-initiator": "agent",
+        },
+    )
+
+    with (
+        patch("run_agent.get_tool_definitions", return_value=_make_tool_defs("web_search")),
+        patch("run_agent.check_toolset_requirements", return_value={}),
+        patch("run_agent.OpenAI"),
+        patch("agent.auxiliary_client.resolve_provider_client", return_value=(mock_client, None)),
+    ):
+        agent = AIAgent(
+            provider="copilot",
+            model="gpt-5.4",
+            quiet_mode=True,
+            skip_context_files=True,
+            skip_memory=True,
+        )
+
+    assert agent._client_kwargs["base_url"] == "https://api.enterprise.githubcopilot.com"
+    assert agent._client_kwargs["api_key"] == "tid=test-token"
+    assert agent._client_kwargs["default_headers"] == mock_client.default_headers
+    assert agent._client_kwargs["default_headers"]["Editor-Version"] == "vscode/1.104.1"
 
 
 def test_aiagent_uses_copilot_acp_client():
