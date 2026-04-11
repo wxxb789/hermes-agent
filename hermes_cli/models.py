@@ -1372,8 +1372,8 @@ def fetch_github_model_catalog(
 def _is_github_models_base_url(base_url: Optional[str]) -> bool:
     normalized = (base_url or "").strip().rstrip("/").lower()
     return (
-        normalized.startswith(COPILOT_BASE_URL)
-        or normalized.startswith("https://models.github.ai/inference")
+        "githubcopilot.com" in normalized
+        or "models.github.ai" in normalized
     )
 
 
@@ -1659,7 +1659,7 @@ def probe_api_models(
     headers: dict[str, str] = {}
     if api_key:
         headers["Authorization"] = f"Bearer {api_key}"
-    if normalized.startswith(COPILOT_BASE_URL):
+    if "githubcopilot.com" in normalized:
         headers.update(copilot_default_headers())
 
     for candidate_base, is_fallback in candidates:

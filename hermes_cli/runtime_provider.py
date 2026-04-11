@@ -136,6 +136,18 @@ def _parse_api_mode(raw: Any) -> Optional[str]:
     return None
 
 
+def _normalize_copilot_runtime_api_key(api_key: str, base_url: str) -> str:
+    raw = str(api_key or "").strip()
+    if not raw:
+        return ""
+    try:
+        from hermes_cli.copilot_auth import normalize_copilot_api_key_for_base_url
+
+        return str(normalize_copilot_api_key_for_base_url(raw, base_url) or raw)
+    except Exception:
+        return raw
+
+
 def _resolve_runtime_from_pool_entry(
     *,
     provider: str,
@@ -166,7 +178,8 @@ def _resolve_runtime_from_pool_entry(
     elif provider == "nous":
         api_mode = "chat_completions"
     elif provider == "copilot":
-        api_mode = _copilot_runtime_api_mode(model_cfg, getattr(entry, "runtime_api_key", ""))
+        api_key = _normalize_copilot_runtime_api_key(api_key, base_url)
+        api_mode = _copilot_runtime_api_mode(model_cfg, api_key)
     else:
         configured_provider = str(model_cfg.get("provider") or "").strip().lower()
         # Honour model.base_url from config.yaml when the configured provider
@@ -195,7 +208,7 @@ def _resolve_runtime_from_pool_entry(
     if api_mode == "anthropic_messages" and provider in ("opencode-zen", "opencode-go"):
         base_url = re.sub(r"/v1/?$", "", base_url)
 
-    return {
+    result = {
         "provider": provider,
         "api_mode": api_mode,
         "base_url": base_url,
@@ -204,6 +217,7 @@ def _resolve_runtime_from_pool_entry(
         "credential_pool": pool,
         "requested_provider": requested_provider,
     }
+    return result
 
 
 def resolve_requested_provider(requested: Optional[str] = None) -> str:
@@ -572,6 +586,7 @@ def _resolve_explicit_runtime(
 
         api_mode = "chat_completions"
         if provider == "copilot":
+            api_key = _normalize_copilot_runtime_api_key(api_key, base_url)
             api_mode = _copilot_runtime_api_mode(model_cfg, api_key)
         else:
             configured_mode = _parse_api_mode(model_cfg.get("api_mode"))
@@ -786,6 +801,7 @@ def resolve_runtime_provider(
     pconfig = PROVIDER_REGISTRY.get(provider)
     if pconfig and pconfig.auth_type == "api_key":
         creds = resolve_api_key_provider_credentials(provider)
+        api_key = creds.get("api_key", "")
         # Honour model.base_url from config.yaml when the configured provider
         # matches this provider — mirrors the Anthropic path above.  Without
         # this, users who set model.base_url to e.g. api.minimaxi.com/anthropic
@@ -797,7 +813,8 @@ def resolve_runtime_provider(
         base_url = cfg_base_url or creds.get("base_url", "").rstrip("/")
         api_mode = "chat_completions"
         if provider == "copilot":
-            api_mode = _copilot_runtime_api_mode(model_cfg, creds.get("api_key", ""))
+            api_key = _normalize_copilot_runtime_api_key(creds.get("api_key", ""), base_url)
+            api_mode = _copilot_runtime_api_mode(model_cfg, api_key)
         else:
             configured_provider = str(model_cfg.get("provider") or "").strip().lower()
             # Only honor persisted api_mode when it belongs to the same provider family.
@@ -818,7 +835,7 @@ def resolve_runtime_provider(
             "provider": provider,
             "api_mode": api_mode,
             "base_url": base_url,
-            "api_key": creds.get("api_key", ""),
+            "api_key": api_key,
             "source": creds.get("source", "env"),
             "requested_provider": requested_provider,
         }

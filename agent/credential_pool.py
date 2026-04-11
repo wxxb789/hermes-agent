@@ -163,6 +163,17 @@ class PooledCredential:
     def runtime_api_key(self) -> str:
         if self.provider == "nous":
             return str(self.agent_key or self.access_token or "")
+        if self.provider == "copilot":
+            raw = str(self.access_token or "")
+            if not raw:
+                return ""
+            try:
+                from hermes_cli.copilot_auth import normalize_copilot_api_key_for_base_url
+
+                return str(normalize_copilot_api_key_for_base_url(raw, self.runtime_base_url or self.base_url) or raw)
+            except Exception:
+                logger.debug("Copilot token exchange failed for pooled credential %s", self.id, exc_info=True)
+                return raw
         return str(self.access_token or "")
 
     @property

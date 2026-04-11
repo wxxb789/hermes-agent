@@ -139,6 +139,42 @@ class TestRequestHeaders:
         assert "Copilot-Vision-Request" not in headers
 
 
+class TestNormalizeCopilotApiKeyForBaseUrl:
+    def test_public_base_url_keeps_raw_token(self):
+        from hermes_cli.copilot_auth import normalize_copilot_api_key_for_base_url
+
+        token = normalize_copilot_api_key_for_base_url(
+            "gho_public_token",
+            "https://api.githubcopilot.com",
+        )
+
+        assert token == "gho_public_token"
+
+    def test_enterprise_base_url_exchanges_raw_token(self):
+        from hermes_cli.copilot_auth import normalize_copilot_api_key_for_base_url
+
+        with patch("hermes_cli.copilot_auth.exchange_copilot_token", return_value="tid=enterprise-token") as mock_exchange:
+            token = normalize_copilot_api_key_for_base_url(
+                "gho_enterprise_token",
+                "https://api.enterprise.githubcopilot.com",
+            )
+
+        assert token == "tid=enterprise-token"
+        mock_exchange.assert_called_once_with("gho_enterprise_token")
+
+    def test_existing_tid_token_is_reused(self):
+        from hermes_cli.copilot_auth import normalize_copilot_api_key_for_base_url
+
+        with patch("hermes_cli.copilot_auth.exchange_copilot_token") as mock_exchange:
+            token = normalize_copilot_api_key_for_base_url(
+                "tid=already-exchanged",
+                "https://api.enterprise.githubcopilot.com",
+            )
+
+        assert token == "tid=already-exchanged"
+        mock_exchange.assert_not_called()
+
+
 class TestCopilotDefaultHeaders:
     """The models.py copilot_default_headers uses copilot_auth."""
 

@@ -721,7 +721,7 @@ def _resolve_api_key_provider() -> Tuple[Optional[OpenAI], Optional[str]]:
             extra = {}
             if "api.kimi.com" in base_url.lower():
                 extra["default_headers"] = {"User-Agent": "KimiCLI/1.30.0"}
-            elif "api.githubcopilot.com" in base_url.lower():
+            elif "githubcopilot.com" in base_url.lower():
                 from hermes_cli.models import copilot_default_headers
 
                 extra["default_headers"] = copilot_default_headers()
@@ -742,7 +742,7 @@ def _resolve_api_key_provider() -> Tuple[Optional[OpenAI], Optional[str]]:
         extra = {}
         if "api.kimi.com" in base_url.lower():
             extra["default_headers"] = {"User-Agent": "KimiCLI/1.30.0"}
-        elif "api.githubcopilot.com" in base_url.lower():
+        elif "githubcopilot.com" in base_url.lower():
             from hermes_cli.models import copilot_default_headers
 
             extra["default_headers"] = copilot_default_headers()
@@ -1256,7 +1256,7 @@ def _to_async_client(sync_client, model: str):
     base_lower = str(sync_client.base_url).lower()
     if "openrouter" in base_lower:
         async_kwargs["default_headers"] = dict(_OR_HEADERS)
-    elif "api.githubcopilot.com" in base_lower:
+    elif "githubcopilot.com" in base_lower:
         from hermes_cli.models import copilot_default_headers
 
         async_kwargs["default_headers"] = copilot_default_headers()
@@ -1529,7 +1529,7 @@ def resolve_provider_client(
         headers = {}
         if "api.kimi.com" in base_url.lower():
             headers["User-Agent"] = "KimiCLI/1.30.0"
-        elif "api.githubcopilot.com" in base_url.lower():
+        elif "githubcopilot.com" in base_url.lower():
             from hermes_cli.models import copilot_default_headers
 
             headers.update(copilot_default_headers())

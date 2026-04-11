@@ -381,6 +381,7 @@ def _resolve_api_key_provider_secret(
         # Use the dedicated copilot auth module for proper token validation
         try:
             from hermes_cli.copilot_auth import resolve_copilot_token
+
             token, source = resolve_copilot_token()
             if token:
                 return token, source
