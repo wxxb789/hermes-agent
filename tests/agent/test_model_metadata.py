@@ -373,6 +373,67 @@ class TestGetModelContextLength:
 
         assert result == 200000
 
+    @patch("agent.models_dev.lookup_models_dev_context", return_value=128000)
+    @patch("hermes_cli.models.fetch_github_model_catalog")
+    @patch("agent.model_metadata.fetch_model_metadata")
+    def test_copilot_live_catalog_context_beats_models_dev(
+        self,
+        mock_fetch,
+        mock_catalog,
+        _mock_models_dev,
+    ):
+        """GitHub Copilot live /models metadata should override stale models.dev context."""
+        mock_fetch.return_value = {}
+        mock_catalog.return_value = [
+            {
+                "id": "claude-opus-4.6",
+                "limits": {
+                    "max_context_window_tokens": 400000,
+                    "max_output_tokens": 32000,
+                },
+                "capabilities": {"type": "chat"},
+                "supported_endpoints": ["/chat/completions"],
+            }
+        ]
+
+        result = get_model_context_length(
+            "claude-opus-4.6",
+            base_url="https://api.githubcopilot.com",
+            api_key="gh-token",
+            provider="copilot",
+        )
+
+        assert result == 400000
+
+    @patch("agent.models_dev.lookup_models_dev_context", return_value=128000)
+    @patch("hermes_cli.models.fetch_github_model_catalog")
+    @patch("agent.model_metadata.fetch_model_metadata")
+    def test_copilot_live_catalog_uses_normalized_model_id(
+        self,
+        mock_fetch,
+        mock_catalog,
+        _mock_models_dev,
+    ):
+        """Copilot live metadata lookup should normalize provider-prefixed aliases first."""
+        mock_fetch.return_value = {}
+        mock_catalog.return_value = [
+            {
+                "id": "gpt-4.1",
+                "limits": {"max_context_window_tokens": 1048576},
+                "capabilities": {"type": "chat"},
+                "supported_endpoints": ["/chat/completions"],
+            }
+        ]
+
+        result = get_model_context_length(
+            "openai/gpt-4.1-mini",
+            base_url="https://models.github.ai/inference/v1",
+            api_key="gh-token",
+            provider="copilot",
+        )
+
+        assert result == 1048576
+
 
 # =========================================================================
 # _strip_provider_prefix — Ollama model:tag vs provider:model

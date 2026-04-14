@@ -30,7 +30,14 @@ from typing import Optional
 logger = logging.getLogger(__name__)
 
 # OAuth device code flow constants (same client ID as opencode/Copilot CLI)
-COPILOT_OAUTH_CLIENT_ID = "Ov23li8tweQw6odWQebz"
+COPILOT_OAUTH_CLIENT_ID = "Iv1.b507a08c87ecfe98"
+COPILOT_DEVICE_CODE_URL = "https://github.com/login/device/code"
+COPILOT_ACCESS_TOKEN_URL = "https://github.com/login/oauth/access_token"
+
+# Copilot API constants
+COPILOT_TOKEN_EXCHANGE_URL = "https://api.github.com/copilot_internal/v2/token"
+COPILOT_API_BASE_URL = "https://api.githubcopilot.com"
+
 # Token type prefixes
 _CLASSIC_PAT_PREFIX = "ghp_"
 _SUPPORTED_PREFIXES = ("gho_", "github_pat_", "ghu_")
@@ -273,6 +280,94 @@ def copilot_device_code_login(
     print()
     print("  ✗ Timed out waiting for authorization.")
     return None
+
+
+# ─── Copilot Token Exchange ────────────────────────────────────────────────
+
+# Cache: (exchanged_token, expiry_timestamp)
+_exchange_cache: tuple[str, float] = ("", 0.0)
+
+
+def exchange_copilot_token(github_token: Optional[str] = None) -> str:
+    """Exchange a GitHub token for a short-lived Copilot API bearer token."""
+    global _exchange_cache
+    import urllib.request
+
+    now = time.time()
+    cached_token, cached_expiry = _exchange_cache
+    if cached_token and now < cached_expiry - 60:
+        return cached_token
+
+    if not github_token:
+        github_token, _ = resolve_copilot_token()
+    if not github_token:
+        raise ValueError("No GitHub token available for Copilot token exchange")
+
+    # Some environments require calling the GitHub internal endpoint
+    # `/copilot_internal/v2/token` (with editor headers) to get a Copilot
+    # bearer token. Fall back to COPILOT_TOKEN_EXCHANGE_URL if not present.
+    import os
+
+    # Default to the public GitHub exchange endpoint which ghc-proxy and many
+    # clients use; allow overriding via env when enterprise/private hosts differ.
+    public_alt = os.getenv('HERMES_COPILOT_PUBLIC_EXCHANGE', 'https://api.github.com/copilot_internal/v2/token')
+    exchange_url = os.getenv('HERMES_COPILOT_TOKEN_EXCHANGE_URL', public_alt)
+
+    headers = {
+        "Authorization": f"token {github_token}",
+        "Accept": "application/json",
+        "Editor-Version": "vscode/1.104.1",
+        "Editor-Plugin-Version": "copilot-chat/0.26.7",
+        "User-Agent": "GitHubCopilotChat/0.26.7",
+        "X-Github-Api-Version": "2025-04-01",
+    }
+
+    logger.debug("Copilot token exchange: url=%s, using github_token_prefix=%s", exchange_url, str(github_token)[:8])
+    logger.debug("Copilot token exchange headers: %s", {k: (v if k != 'Authorization' else 'REDACTED') for k, v in headers.items()})
+
+    req = urllib.request.Request(exchange_url, headers=headers)
+
+    try:
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            data = json.loads(resp.read().decode())
+    except urllib.error.HTTPError as e:
+        logger.warning("Copilot token exchange failed on %s: %s", exchange_url, e)
+        # Try alternate path used by ghc-proxy if the exchange URL failed
+        alt = public_alt
+        if exchange_url != alt:
+            logger.debug("Attempting fallback public exchange %s", alt)
+            req2 = urllib.request.Request(alt, headers=headers)
+            with urllib.request.urlopen(req2, timeout=10) as resp2:
+                data = json.loads(resp2.read().decode())
+        else:
+            raise
+
+    token = data.get("token", "")
+    expires_at = data.get("expires_at", 0)
+    if not token:
+        raise ValueError("Copilot token exchange returned empty token")
+
+    _exchange_cache = (token, float(expires_at))
+    logger.debug("Copilot token exchanged, expires_at=%s", expires_at)
+    return token
+
+
+def normalize_copilot_api_key_for_base_url(api_key: str, base_url: Optional[str]) -> str:
+    """Return the right Copilot credential shape for the target endpoint.
+
+    Public api.githubcopilot.com accepts raw GitHub tokens directly. Explicit
+    enterprise endpoints require a short-lived exchanged bearer token (tid=...).
+    """
+    raw = str(api_key or "").strip()
+    if not raw:
+        return ""
+
+    normalized_base_url = str(base_url or "").strip().lower()
+    if raw.startswith("tid="):
+        return raw
+    if "enterprise.githubcopilot.com" not in normalized_base_url:
+        return raw
+    return exchange_copilot_token(raw)
 
 
 # ─── Copilot API Headers ───────────────────────────────────────────────────

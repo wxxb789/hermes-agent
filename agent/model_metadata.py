@@ -176,6 +176,7 @@ _CONTEXT_LENGTH_KEYS = (
     "context_length",
     "context_window",
     "max_context_length",
+    "max_context_window_tokens",
     "max_position_embeddings",
     "max_model_len",
     "max_input_tokens",
@@ -231,7 +232,7 @@ _URL_TO_PROVIDER: Dict[str, str] = {
     "generativelanguage.googleapis.com": "gemini",
     "inference-api.nousresearch.com": "nous",
     "api.deepseek.com": "deepseek",
-    "api.githubcopilot.com": "copilot",
+    "githubcopilot.com": "copilot",
     "models.github.ai": "copilot",
     "api.fireworks.ai": "fireworks",
     "opencode.ai": "opencode-go",
@@ -1027,6 +1028,26 @@ def get_model_context_length(
         ctx = _resolve_nous_context_length(model)
         if ctx:
             return ctx
+    if effective_provider == "copilot":
+        try:
+            from hermes_cli.models import fetch_github_model_catalog, normalize_copilot_model_id
+
+            normalized_model = normalize_copilot_model_id(model, api_key=api_key) or model
+            catalog = fetch_github_model_catalog(api_key=api_key)
+            if catalog:
+                catalog_entry = next(
+                    (
+                        item for item in catalog
+                        if str(item.get("id") or "").strip() == normalized_model
+                    ),
+                    None,
+                )
+                if isinstance(catalog_entry, dict):
+                    ctx = _extract_context_length(catalog_entry)
+                    if ctx:
+                        return ctx
+        except Exception:
+            pass
     if effective_provider:
         from agent.models_dev import lookup_models_dev_context
         ctx = lookup_models_dev_context(effective_provider, model)

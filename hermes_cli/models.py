@@ -1225,14 +1225,51 @@ def provider_model_ids(provider: Optional[str], *, force_refresh: bool = False) 
 
         return get_codex_model_ids()
     if normalized in {"copilot", "copilot-acp"}:
+        # Resolve provider credentials via auth layer (reads ~/.hermes/.env first).
         try:
-            live = _fetch_github_models(_resolve_copilot_catalog_api_key())
-            if live:
-                return live
+            from hermes_cli.auth import resolve_api_key_provider_credentials
+            creds = resolve_api_key_provider_credentials('copilot')
+            raw = str(creds.get('api_key') or '').strip()
+            base_url = str(creds.get('base_url') or '').strip() or COPILOT_BASE_URL
         except Exception:
-            pass
-        if normalized == "copilot-acp":
-            return list(_PROVIDER_MODELS.get("copilot", []))
+            raw = _resolve_copilot_catalog_api_key()
+            base_url = COPILOT_BASE_URL
+
+        # Try exchange then fetch using the right api base
+        try:
+            from hermes_cli.copilot_auth import exchange_copilot_token
+            exchanged = ''
+            if raw:
+                try:
+                    exchanged = exchange_copilot_token(raw)
+                except Exception:
+                    exchanged = ''
+            if exchanged:
+                live = _fetch_github_models(exchanged)
+                if live:
+                    return live
+            # If we have a specific base_url (enterprise), try fetching against it with raw token
+            if raw and base_url:
+                try:
+                    # If raw looks like a tid= already, use as-is
+                    live = _fetch_github_models(raw if raw.startswith('tid=') else raw, timeout=5)
+                    if live:
+                        return live
+                except Exception:
+                    pass
+            # Last resort: fall back to configured provider models
+            if normalized == 'copilot-acp':
+                return list(_PROVIDER_MODELS.get('copilot', []))
+        except Exception:
+            # conservative fallback
+            try:
+                live = _fetch_github_models(_resolve_copilot_catalog_api_key())
+                if live:
+                    return live
+            except Exception:
+                pass
+        if normalized == 'copilot-acp':
+            return list(_PROVIDER_MODELS.get('copilot', []))
     if normalized == "nous":
         # Try live Nous Portal /models endpoint
         try:
@@ -1406,8 +1443,8 @@ def fetch_github_model_catalog(
 def _is_github_models_base_url(base_url: Optional[str]) -> bool:
     normalized = (base_url or "").strip().rstrip("/").lower()
     return (
-        normalized.startswith(COPILOT_BASE_URL)
-        or normalized.startswith("https://models.github.ai/inference")
+        "githubcopilot.com" in normalized
+        or "models.github.ai" in normalized
     )
 
 
@@ -1693,7 +1730,7 @@ def probe_api_models(
     headers: dict[str, str] = {}
     if api_key:
         headers["Authorization"] = f"Bearer {api_key}"
-    if normalized.startswith(COPILOT_BASE_URL):
+    if "githubcopilot.com" in normalized:
         headers.update(copilot_default_headers())
 
     for candidate_base, is_fallback in candidates:

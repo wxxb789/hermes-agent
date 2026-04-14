@@ -268,6 +268,60 @@ def test_resolve_runtime_provider_ai_gateway_explicit_override_skips_pool(monkey
     assert resolved.get("credential_pool") is None
 
 
+def test_resolve_runtime_provider_copilot_configured_enterprise_base_exchanges_token(monkeypatch):
+    monkeypatch.setattr(rp, "resolve_provider", lambda *a, **k: "copilot")
+    monkeypatch.setattr(
+        rp,
+        "_get_model_config",
+        lambda: {
+            "provider": "copilot",
+            "base_url": "https://api.enterprise.githubcopilot.com",
+            "default": "gpt-5.4",
+        },
+    )
+    monkeypatch.setattr(
+        rp,
+        "resolve_api_key_provider_credentials",
+        lambda provider: {
+            "provider": provider,
+            "api_key": "gho_enterprise_token",
+            "base_url": "https://api.githubcopilot.com",
+            "source": "GITHUB_TOKEN",
+        },
+    )
+    monkeypatch.setattr(
+        "hermes_cli.copilot_auth.exchange_copilot_token",
+        lambda token=None: "tid=enterprise-token",
+    )
+
+    resolved = rp.resolve_runtime_provider(requested="copilot")
+
+    assert resolved["provider"] == "copilot"
+    assert resolved["base_url"] == "https://api.enterprise.githubcopilot.com"
+    assert resolved["api_key"] == "tid=enterprise-token"
+    assert resolved["api_mode"] == "codex_responses"
+
+
+def test_resolve_runtime_provider_copilot_explicit_enterprise_base_exchanges_token(monkeypatch):
+    monkeypatch.setattr(rp, "resolve_provider", lambda *a, **k: "copilot")
+    monkeypatch.setattr(rp, "_get_model_config", lambda: {"provider": "copilot", "default": "gpt-4.1"})
+    monkeypatch.setattr(
+        "hermes_cli.copilot_auth.exchange_copilot_token",
+        lambda token=None: "tid=explicit-enterprise-token",
+    )
+
+    resolved = rp.resolve_runtime_provider(
+        requested="copilot",
+        explicit_api_key="gho_explicit_token",
+        explicit_base_url="https://api.enterprise.githubcopilot.com",
+    )
+
+    assert resolved["provider"] == "copilot"
+    assert resolved["base_url"] == "https://api.enterprise.githubcopilot.com"
+    assert resolved["api_key"] == "tid=explicit-enterprise-token"
+    assert resolved["api_mode"] == "chat_completions"
+
+
 def test_resolve_runtime_provider_openrouter_explicit(monkeypatch):
     monkeypatch.setattr(rp, "resolve_provider", lambda *a, **k: "openrouter")
     monkeypatch.setattr(rp, "_get_model_config", lambda: {})
