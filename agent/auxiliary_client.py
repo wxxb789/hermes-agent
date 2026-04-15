@@ -721,7 +721,7 @@ def _resolve_api_key_provider() -> Tuple[Optional[OpenAI], Optional[str]]:
             extra = {}
             if "api.kimi.com" in base_url.lower():
                 extra["default_headers"] = {"User-Agent": "KimiCLI/1.30.0"}
-            elif "api.githubcopilot.com" in base_url.lower():
+            elif "githubcopilot.com" in base_url.lower():
                 from hermes_cli.models import copilot_default_headers
 
                 extra["default_headers"] = copilot_default_headers()
@@ -742,7 +742,7 @@ def _resolve_api_key_provider() -> Tuple[Optional[OpenAI], Optional[str]]:
         extra = {}
         if "api.kimi.com" in base_url.lower():
             extra["default_headers"] = {"User-Agent": "KimiCLI/1.30.0"}
-        elif "api.githubcopilot.com" in base_url.lower():
+        elif "githubcopilot.com" in base_url.lower():
             from hermes_cli.models import copilot_default_headers
 
             extra["default_headers"] = copilot_default_headers()
@@ -1238,7 +1238,7 @@ def _to_async_client(sync_client, model: str):
     base_lower = str(sync_client.base_url).lower()
     if "openrouter" in base_lower:
         async_kwargs["default_headers"] = dict(_OR_HEADERS)
-    elif "api.githubcopilot.com" in base_lower:
+    elif "githubcopilot.com" in base_lower:
         from hermes_cli.models import copilot_default_headers
 
         async_kwargs["default_headers"] = copilot_default_headers()
@@ -1498,8 +1498,8 @@ def resolve_provider_client(
             return (_to_async_client(client, final_model) if async_mode else (client, final_model))
 
         creds = resolve_api_key_provider_credentials(provider)
-        api_key = str(creds.get("api_key", "")).strip()
-        if not api_key:
+        raw_api_key = str(creds.get("api_key", "")).strip()
+        if not raw_api_key:
             tried_sources = list(pconfig.api_key_env_vars)
             if provider == "copilot":
                 tried_sources.append("gh auth token")
@@ -1512,6 +1512,16 @@ def resolve_provider_client(
             str(creds.get("base_url", "")).strip().rstrip("/") or pconfig.inference_base_url
         )
 
+        # Normalize Copilot token shape when provider is copilot or base_url looks like Copilot
+        api_key = raw_api_key
+        try:
+            if provider == "copilot" or "githubcopilot.com" in (base_url or "").lower():
+                from hermes_cli.copilot_auth import normalize_copilot_api_key_for_base_url
+                api_key = normalize_copilot_api_key_for_base_url(raw_api_key, base_url)
+        except Exception:
+            # If normalization/exchange fails, log and continue with raw key (later code/tests will catch failures)
+            logger.debug("resolve_provider_client: failed to normalize Copilot API key for %s", base_url, exc_info=True)
+
         default_model = _API_KEY_PROVIDER_AUX_MODELS.get(provider, "")
         final_model = _normalize_resolved_model(model or default_model, provider)
 
@@ -1519,7 +1529,7 @@ def resolve_provider_client(
         headers = {}
         if "api.kimi.com" in base_url.lower():
             headers["User-Agent"] = "KimiCLI/1.30.0"
-        elif "api.githubcopilot.com" in base_url.lower():
+        elif "githubcopilot.com" in base_url.lower():
             from hermes_cli.models import copilot_default_headers
 
             headers.update(copilot_default_headers())

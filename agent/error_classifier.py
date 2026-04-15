@@ -183,6 +183,9 @@ _MODEL_NOT_FOUND_PATTERNS = [
     "no such model",
     "unknown model",
     "unsupported model",
+    "model is not supported",
+    "model_not_supported",
+    "not a supported model",
 ]
 
 # Auth patterns (non-status-code signals)
@@ -642,7 +645,7 @@ def _classify_by_error_code(
             should_fallback=True,
         )
 
-    if code_lower in ("model_not_found", "model_not_available", "invalid_model"):
+    if code_lower in ("model_not_found", "model_not_available", "invalid_model", "model_not_supported"):
         return result_fn(
             FailoverReason.model_not_found,
             retryable=False,

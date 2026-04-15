@@ -162,6 +162,17 @@ class PooledCredential:
     def runtime_api_key(self) -> str:
         if self.provider == "nous":
             return str(self.agent_key or self.access_token or "")
+        if self.provider == "copilot":
+            raw = str(self.access_token or "")
+            if not raw:
+                return ""
+            try:
+                from hermes_cli.copilot_auth import normalize_copilot_api_key_for_base_url
+
+                return str(normalize_copilot_api_key_for_base_url(raw, self.runtime_base_url or self.base_url) or raw)
+            except Exception:
+                logger.debug("Copilot token exchange failed for pooled credential %s", self.id, exc_info=True)
+                return raw
         return str(self.access_token or "")
 
     @property
@@ -1212,7 +1223,14 @@ def _seed_from_singletons(provider: str, entries: List[PooledCredential]) -> Tup
         # store has no tokens.  This mirrors resolve_codex_runtime_credentials()
         # so that load_pool() and list_authenticated_providers() detect tokens
         # that only exist in the Codex CLI shared file.
-        if not (isinstance(tokens, dict) and tokens.get("access_token")):
+        # If the auth store already contains a credential pool for this provider,
+        # prefer it and do not import tokens from the Codex CLI (~/.codex/auth.json).
+        # Importing CLI tokens here can silently add a device_code entry which
+        # tests (and users) may not expect. Only attempt import when there is
+        # no persisted credential_pool for this provider.
+        pool_root = auth_store.get("credential_pool")
+        provider_has_pool = isinstance(pool_root, dict) and pool_root.get(provider)
+        if not (isinstance(tokens, dict) and tokens.get("access_token")) and not provider_has_pool:
             try:
                 from hermes_cli.auth import _import_codex_cli_tokens, _save_codex_tokens
                 cli_tokens = _import_codex_cli_tokens()

@@ -573,70 +573,26 @@ if __name__ == "__main__":
     
     # Check if API key is available
     api_available = check_fal_api_key()
-    
+    # Image generation tool: user-facing CLI prints and verbose debug messages
+    # were used during development. These verbose prints are temporary and
+    # not suitable for library imports or automated tests. Keep a compact
+    # informational output and defer detailed debug logs to the logger.
+
     if not api_available:
-        print("❌ FAL_KEY environment variable not set")
-        print("Please set your API key: export FAL_KEY='your-key-here'")
-        print("Get API key at: https://fal.ai/")
-        exit(1)
-    else:
-        print("✅ FAL.ai API key found")
-    
-    # Check if fal_client is available
+        raise RuntimeError("FAL.ai API key not set (set FAL_KEY env var)")
+
     try:
-        import fal_client
-        print("✅ fal_client library available")
+        import fal_client  # noqa: F401
     except ImportError:
-        print("❌ fal_client library not found")
-        print("Please install: pip install fal-client")
-        exit(1)
-    
-    print("🛠️ Image generation tools ready for use!")
-    print(f"🤖 Using model: {DEFAULT_MODEL}")
-    print(f"🔍 Auto-upscaling with: {UPSCALER_MODEL} ({UPSCALER_FACTOR}x)")
-    
-    # Show debug mode status
-    if _debug.active:
-        print(f"🐛 Debug mode ENABLED - Session ID: {_debug.session_id}")
-        print(f"   Debug logs will be saved to: ./logs/image_tools_debug_{_debug.session_id}.json")
-    else:
-        print("🐛 Debug mode disabled (set IMAGE_TOOLS_DEBUG=true to enable)")
-    
-    print("\nBasic usage:")
-    print("  from image_generation_tool import image_generate_tool")
-    print("  import asyncio")
-    print("")
-    print("  async def main():")
-    print("      # Generate image with automatic 2x upscaling")
-    print("      result = await image_generate_tool(")
-    print("          prompt='A serene mountain landscape with cherry blossoms',")
-    print("          image_size='landscape_4_3',")
-    print("          num_images=1")
-    print("      )")
-    print("      print(result)")
-    print("  asyncio.run(main())")
-    
-    print("\nSupported image sizes:")
-    for size in VALID_IMAGE_SIZES:
-        print(f"  - {size}")
-    print("  - Custom: {'width': 512, 'height': 768} (if needed)")
-    
-    print("\nAcceleration modes:")
-    for mode in VALID_ACCELERATION_MODES:
-        print(f"  - {mode}")
-    
-    print("\nExample prompts:")
-    print("  - 'A candid street photo of a woman with a pink bob and bold eyeliner'")
-    print("  - 'Modern architecture building with glass facade, sunset lighting'")
-    print("  - 'Abstract art with vibrant colors and geometric patterns'")
-    print("  - 'Portrait of a wise old owl perched on ancient tree branch'")
-    print("  - 'Futuristic cityscape with flying cars and neon lights'")
-    
-    print("\nDebug mode:")
-    print("  # Enable debug logging")
-    print("  export IMAGE_TOOLS_DEBUG=true")
-    print("  # Debug logs capture all image generation calls and results")
-    print("  # Logs saved to: ./logs/image_tools_debug_UUID.json")
+        raise RuntimeError("fal_client library not installed (pip install fal-client)")
+
+    # Minimal informational metadata only
+    logger.info("Image generation tools ready (model=%s, upscaler=%s x%d)",
+                DEFAULT_MODEL, UPSCALER_MODEL, UPSCALER_FACTOR)
+
+    # Respect debug flag by enabling logger debug level elsewhere; do not print here.
+    # Usage examples and long help text belong in README or CLI help, not module import.
+
 
 
 # ---------------------------------------------------------------------------

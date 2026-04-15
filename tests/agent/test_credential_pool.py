@@ -92,6 +92,41 @@ def test_select_clears_expired_exhaustion(tmp_path, monkeypatch):
     assert entry.last_status == "ok"
 
 
+def test_copilot_runtime_api_key_exchanges_raw_github_token(tmp_path, monkeypatch):
+    monkeypatch.setenv("HERMES_HOME", str(tmp_path / "hermes"))
+    _write_auth_store(
+        tmp_path,
+        {
+            "version": 1,
+            "credential_pool": {
+                "copilot": [
+                    {
+                        "id": "copilot-1",
+                        "label": "GITHUB_TOKEN",
+                        "auth_type": "api_key",
+                        "priority": 0,
+                        "source": "manual",
+                        "access_token": "ghu_raw_secret",
+                        "base_url": "https://api.enterprise.githubcopilot.com",
+                    }
+                ]
+            },
+        },
+    )
+    monkeypatch.setattr(
+        "hermes_cli.copilot_auth.exchange_copilot_token",
+        lambda token=None: "tid=exchanged_secret",
+    )
+
+    from agent.credential_pool import load_pool
+
+    pool = load_pool("copilot")
+    entry = pool.select()
+
+    assert entry is not None
+    assert entry.runtime_api_key == "tid=exchanged_secret"
+
+
 def test_round_robin_strategy_rotates_priorities(tmp_path, monkeypatch):
     monkeypatch.setenv("HERMES_HOME", str(tmp_path / "hermes"))
     _write_auth_store(
