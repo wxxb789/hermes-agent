@@ -26,3 +26,9 @@ def is_github_models_base_url(base_url: str | None) -> bool:
         or host == "models.inference.ai.azure.com"
         or is_copilot_base_url(base_url)
     )
+
+
+def is_copilot_enterprise_base_url(base_url: str | None) -> bool:
+    """Return True for non-public GitHub Copilot Enterprise API hosts."""
+    host = base_url_hostname(str(base_url or ""))
+    return is_copilot_base_url(base_url) and host != "api.githubcopilot.com"

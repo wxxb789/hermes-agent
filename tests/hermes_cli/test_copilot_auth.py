@@ -67,32 +67,45 @@ class TestResolveToken:
         assert token == "gho_github_third"
         assert source == "GITHUB_TOKEN"
 
-    def test_classic_pat_in_env_skipped(self, monkeypatch):
-        """Classic PATs in env vars should be skipped, not returned."""
+    def test_classic_pat_in_env_fails_closed(self, monkeypatch):
+        """An explicit invalid env token should not fall through to later sources."""
         from hermes_cli.copilot_auth import resolve_copilot_token
         monkeypatch.setenv("COPILOT_GITHUB_TOKEN", "ghp_classic_pat_nope")
         monkeypatch.delenv("GH_TOKEN", raising=False)
         monkeypatch.setenv("GITHUB_TOKEN", "gho_valid_oauth")
         token, source = resolve_copilot_token()
-        # Should skip the ghp_ token and find the gho_ one
-        assert token == "gho_valid_oauth"
-        assert source == "GITHUB_TOKEN"
+        assert token == ""
+        assert source == ""
 
-    def test_gh_cli_fallback(self, monkeypatch):
+    def test_gh_cli_fallback_requires_opt_in(self, monkeypatch):
         from hermes_cli.copilot_auth import resolve_copilot_token
         monkeypatch.delenv("COPILOT_GITHUB_TOKEN", raising=False)
         monkeypatch.delenv("GH_TOKEN", raising=False)
         monkeypatch.delenv("GITHUB_TOKEN", raising=False)
+        monkeypatch.delenv("COPILOT_ALLOW_GH_CLI", raising=False)
+        with patch("hermes_cli.copilot_auth._try_gh_cli_token", return_value="gho_from_cli") as mock_gh:
+            token, source = resolve_copilot_token()
+        assert token == ""
+        assert source == ""
+        mock_gh.assert_not_called()
+
+    def test_gh_cli_fallback_when_opted_in(self, monkeypatch):
+        from hermes_cli.copilot_auth import resolve_copilot_token
+        monkeypatch.delenv("COPILOT_GITHUB_TOKEN", raising=False)
+        monkeypatch.delenv("GH_TOKEN", raising=False)
+        monkeypatch.delenv("GITHUB_TOKEN", raising=False)
+        monkeypatch.setenv("COPILOT_ALLOW_GH_CLI", "true")
         with patch("hermes_cli.copilot_auth._try_gh_cli_token", return_value="gho_from_cli"):
             token, source = resolve_copilot_token()
         assert token == "gho_from_cli"
         assert source == "gh auth token"
 
-    def test_gh_cli_classic_pat_raises(self, monkeypatch):
+    def test_gh_cli_classic_pat_raises_when_opted_in(self, monkeypatch):
         from hermes_cli.copilot_auth import resolve_copilot_token
         monkeypatch.delenv("COPILOT_GITHUB_TOKEN", raising=False)
         monkeypatch.delenv("GH_TOKEN", raising=False)
         monkeypatch.delenv("GITHUB_TOKEN", raising=False)
+        monkeypatch.setenv("COPILOT_ALLOW_GH_CLI", "true")
         with patch("hermes_cli.copilot_auth._try_gh_cli_token", return_value="ghp_classic"):
             with pytest.raises(ValueError, match="classic PAT"):
                 resolve_copilot_token()

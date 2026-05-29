@@ -340,8 +340,12 @@ def _resolve_runtime_from_pool_entry(
     elif provider == "nous":
         api_mode = "chat_completions"
     elif provider == "copilot":
+        cfg_provider = str(model_cfg.get("provider") or "").strip().lower()
+        cfg_base_url = ""
+        if cfg_provider == "copilot":
+            cfg_base_url = str(model_cfg.get("base_url") or "").strip().rstrip("/")
+        base_url = cfg_base_url or base_url or PROVIDER_REGISTRY["copilot"].inference_base_url
         api_mode = _copilot_runtime_api_mode(model_cfg, getattr(entry, "runtime_api_key", ""))
-        base_url = base_url or PROVIDER_REGISTRY["copilot"].inference_base_url
     elif provider == "azure-foundry":
         # Azure Foundry: read api_mode and base_url from config
         cfg_provider = str(model_cfg.get("provider") or "").strip().lower()

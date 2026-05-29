@@ -70,7 +70,9 @@ def resolve_copilot_token() -> tuple[str, str]:
     Returns (token, source) where source describes where the token came from.
     Raises ValueError if only a classic PAT is available.
     """
-    # 1. Check env vars in priority order
+    # 1. Check env vars in priority order. If a Copilot env var is present but
+    # invalid, do not silently fall through to gh CLI: env configuration is an
+    # explicit operator choice and should fail closed.
     for env_var in COPILOT_ENV_VARS:
         val = os.getenv(env_var, "").strip()
         if val:
@@ -79,10 +81,14 @@ def resolve_copilot_token() -> tuple[str, str]:
                 logger.warning(
                     "Token from %s is not supported: %s", env_var, msg
                 )
-                continue
+                return "", ""
             return val, env_var
 
-    # 2. Fall back to gh auth token
+    # 2. gh auth token fallback is opt-in. In service/gateway contexts it can
+    # seed a generic GitHub token into the Copilot pool and bypass configured
+    # enterprise/API-token intent.
+    if os.getenv("COPILOT_ALLOW_GH_CLI", "").strip().lower() not in {"1", "true", "yes", "on"}:
+        return "", ""
     token = _try_gh_cli_token()
     if token:
         valid, msg = validate_copilot_token(token)
@@ -350,20 +356,24 @@ def exchange_copilot_token(raw_token: str, *, timeout: float = 10.0) -> tuple[st
     return api_token, expires_at
 
 
-def get_copilot_api_token(raw_token: str) -> str:
-    """Exchange a raw GitHub token for a Copilot API token, with fallback.
+def get_copilot_api_token(raw_token: str, *, require_exchange: bool = False) -> str:
+    """Exchange a raw GitHub token for a Copilot API token.
 
-    Convenience wrapper: returns the exchanged token on success, or the
-    raw token unchanged if the exchange fails (e.g. network error, unsupported
-    account type). This preserves existing behaviour for accounts that don't
-    need exchange while enabling access to internal-only models for those that do.
+    By default this preserves legacy public-endpoint behaviour by falling back
+    to the raw token on exchange failure. Enterprise Copilot callers should pass
+    ``require_exchange=True`` so raw GitHub tokens never leak into runtime calls
+    after a failed exchange.
     """
     if not raw_token:
+        return raw_token
+    if raw_token.strip().startswith("tid="):
         return raw_token
     try:
         api_token, _ = exchange_copilot_token(raw_token)
         return api_token
     except Exception as exc:
+        if require_exchange:
+            raise
         logger.debug("Copilot token exchange failed, using raw token: %s", exc)
         return raw_token
 

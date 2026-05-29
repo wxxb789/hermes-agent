@@ -85,3 +85,56 @@ def test_build_api_kwargs_marks_enterprise_base_as_github_responses():
 
     assert kwargs.get("reasoning") == {"effort": "medium"}
     assert "include" not in kwargs
+
+
+
+def test_copilot_pool_runtime_api_key_requires_exchange_for_enterprise(monkeypatch):
+    from agent.credential_pool import PooledCredential
+
+    def boom(raw_token, *, require_exchange=False):
+        assert require_exchange is True
+        raise ValueError("exchange failed")
+
+    monkeypatch.setattr("hermes_cli.copilot_auth.get_copilot_api_token", boom)
+    entry = PooledCredential(
+        provider="copilot",
+        id="c1",
+        label="enterprise",
+        auth_type="api_key",
+        priority=0,
+        source="manual",
+        access_token="github_pat_raw",
+        base_url=ENTERPRISE_BASE,
+    )
+
+    import pytest
+    with pytest.raises(ValueError, match="exchange failed"):
+        _ = entry.runtime_api_key
+
+
+def test_copilot_pool_runtime_base_url_prefers_config_enterprise(monkeypatch):
+    from agent.credential_pool import PooledCredential
+    from hermes_cli.runtime_provider import _resolve_runtime_from_pool_entry
+
+    monkeypatch.setattr("hermes_cli.copilot_auth.get_copilot_api_token", lambda token, **kw: "tid=enterprise")
+    entry = PooledCredential(
+        provider="copilot",
+        id="c1",
+        label="pool-public",
+        auth_type="api_key",
+        priority=0,
+        source="manual",
+        access_token="github_pat_raw",
+        base_url="https://api.githubcopilot.com",
+    )
+
+    runtime = _resolve_runtime_from_pool_entry(
+        provider="copilot",
+        requested_provider="copilot",
+        entry=entry,
+        pool=None,
+        model_cfg={"provider": "copilot", "base_url": ENTERPRISE_BASE, "default": "gpt-5.5"},
+    )
+
+    assert runtime["base_url"] == ENTERPRISE_BASE
+    assert runtime["api_key"] == "tid=enterprise"

@@ -173,6 +173,24 @@ class PooledCredential:
             # Nous stores the runtime inference credential in agent_key for
             # compatibility. It may be a NAS invoke JWT or legacy opaque key.
             return str(self.agent_key or self.access_token or "")
+        if self.provider == "copilot":
+            token = str(self.access_token or "")
+            base_url = str(self.base_url or "")
+            if token.strip().startswith("tid="):
+                return token
+            try:
+                from agent.copilot_url import is_copilot_enterprise_base_url
+                from hermes_cli.copilot_auth import get_copilot_api_token
+
+                return get_copilot_api_token(
+                    token,
+                    require_exchange=is_copilot_enterprise_base_url(base_url),
+                )
+            except Exception:
+                from agent.copilot_url import is_copilot_enterprise_base_url as _is_enterprise
+                if _is_enterprise(base_url):
+                    raise
+                return token
         return str(self.access_token or "")
 
     @property
@@ -1655,14 +1673,13 @@ def _seed_from_singletons(provider: str, entries: List[PooledCredential]) -> Tup
             )
 
     elif provider == "copilot":
-        # Copilot tokens are resolved dynamically via `gh auth token` or
-        # env vars (COPILOT_GITHUB_TOKEN / GH_TOKEN).  They don't live in
-        # the auth store or credential pool, so we resolve them here.
+        # Copilot env tokens may be resolved dynamically. gh CLI fallback is
+        # intentionally opt-in inside resolve_copilot_token() to avoid seeding a
+        # generic GitHub token into gateway/profile credential pools by accident.
         try:
-            from hermes_cli.copilot_auth import resolve_copilot_token, get_copilot_api_token
+            from hermes_cli.copilot_auth import resolve_copilot_token
             token, source = resolve_copilot_token()
             if token:
-                api_token = get_copilot_api_token(token)
                 source_name = "gh_cli" if "gh" in source.lower() else f"env:{source}"
                 if not _is_suppressed(provider, source_name):
                     active_sources.add(source_name)
@@ -1674,7 +1691,7 @@ def _seed_from_singletons(provider: str, entries: List[PooledCredential]) -> Tup
                         {
                             "source": source_name,
                             "auth_type": AUTH_TYPE_API_KEY,
-                            "access_token": api_token,
+                            "access_token": token,
                             "base_url": pconfig.inference_base_url if pconfig else "",
                             "label": source,
                         },
