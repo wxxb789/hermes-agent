@@ -61,6 +61,7 @@ from agent.tool_guardrails import (
 )
 from tools.terminal_tool import is_persistent_env
 from utils import base_url_host_matches, base_url_hostname
+from agent.copilot_url import is_github_models_base_url
 
 logger = logging.getLogger(__name__)
 
@@ -594,8 +595,7 @@ def build_api_kwargs(agent, api_messages: list) -> dict:
     if agent.api_mode == "codex_responses":
         _ct = agent._get_transport()
         is_github_responses = (
-            base_url_host_matches(agent.base_url, "models.github.ai")
-            or base_url_host_matches(agent.base_url, "api.githubcopilot.com")
+            is_github_models_base_url(agent.base_url)
         )
         is_codex_backend = (
             agent.provider == "openai-codex"
@@ -653,8 +653,7 @@ def build_api_kwargs(agent, api_messages: list) -> dict:
     _is_qwen = agent._is_qwen_portal()
     _is_or = agent._is_openrouter_url()
     _is_gh = (
-        base_url_host_matches(agent._base_url_lower, "models.github.ai")
-        or base_url_host_matches(agent._base_url_lower, "api.githubcopilot.com")
+        is_github_models_base_url(agent._base_url_lower)
     )
     _is_nous = "nousresearch" in agent._base_url_lower
     _is_nvidia = "integrate.api.nvidia.com" in agent._base_url_lower

@@ -54,6 +54,7 @@ from hermes_cli.timeouts import get_provider_request_timeout
 from hermes_constants import get_hermes_home
 from model_tools import check_toolset_requirements, get_tool_definitions
 from utils import base_url_host_matches
+from agent.copilot_url import is_copilot_base_url
 
 # Use the same logger name as run_agent so tests patching ``run_agent.logger``
 # capture our warnings.  (run_agent.py also does
@@ -723,7 +724,7 @@ def init_agent(
                 client_kwargs["default_headers"] = build_nvidia_nim_headers(effective_base)
             elif base_url_host_matches(effective_base, "api.routermint.com"):
                 client_kwargs["default_headers"] = _ra()._routermint_headers()
-            elif base_url_host_matches(effective_base, "api.githubcopilot.com"):
+            elif is_copilot_base_url(effective_base):
                 from hermes_cli.models import copilot_default_headers
 
                 client_kwargs["default_headers"] = copilot_default_headers()

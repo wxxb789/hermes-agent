@@ -2568,12 +2568,9 @@ def get_copilot_model_context(model_id: str, api_key: Optional[str] = None) -> O
 
 
 def _is_github_models_base_url(base_url: Optional[str]) -> bool:
-    normalized = (base_url or "").strip().rstrip("/").lower()
-    return (
-        normalized.startswith(COPILOT_BASE_URL)
-        or normalized.startswith("https://models.github.ai/inference")
-        or normalized.startswith("https://models.inference.ai.azure.com")
-    )
+    from agent.copilot_url import is_github_models_base_url
+
+    return is_github_models_base_url(base_url)
 
 
 def _lmstudio_server_root(base_url: Optional[str]) -> Optional[str]:

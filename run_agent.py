@@ -203,6 +203,7 @@ from agent.tool_dispatch_helpers import (
     _trajectory_normalize_msg,
 )
 from utils import atomic_json_write, base_url_host_matches, base_url_hostname, env_var_enabled, normalize_proxy_url
+from agent.copilot_url import is_copilot_base_url, is_github_models_base_url
 from hermes_cli.config import cfg_get
 
 
@@ -1050,7 +1051,7 @@ class AIAgent:
             hostname = getattr(self, "_base_url_hostname", "") or base_url_hostname(
                 getattr(self, "_base_url_lower", "")
             )
-        return hostname == "api.githubcopilot.com"
+        return is_copilot_base_url(base_url if base_url is not None else getattr(self, "_base_url_lower", ""))
 
     def _resolved_api_call_timeout(self) -> float:
         """Resolve the effective per-call request timeout in seconds.
@@ -2885,7 +2886,7 @@ class AIAgent:
         # unaffected (they don't go through here).
         request_kwargs["max_retries"] = 0
         if (
-            base_url_host_matches(str(request_kwargs.get("base_url", "")), "api.githubcopilot.com")
+            is_copilot_base_url(str(request_kwargs.get("base_url", "")))
             and self._api_kwargs_have_image_parts(api_kwargs or {})
         ):
             request_kwargs["default_headers"] = self._copilot_headers_for_request(is_vision=True)
@@ -3158,7 +3159,7 @@ class AIAgent:
             self._client_kwargs["default_headers"] = build_nvidia_nim_headers(base_url)
         elif base_url_host_matches(base_url, "api.routermint.com"):
             self._client_kwargs["default_headers"] = _routermint_headers()
-        elif base_url_host_matches(base_url, "api.githubcopilot.com"):
+        elif is_copilot_base_url(base_url):
             from hermes_cli.models import copilot_default_headers
 
             self._client_kwargs["default_headers"] = copilot_default_headers()
@@ -3959,8 +3960,7 @@ class AIAgent:
         if base_url_host_matches(self._base_url_lower, "nousresearch.com"):
             return True
         if (
-            base_url_host_matches(self._base_url_lower, "models.github.ai")
-            or base_url_host_matches(self._base_url_lower, "api.githubcopilot.com")
+            is_github_models_base_url(self._base_url_lower)
         ):
             try:
                 from hermes_cli.models import github_model_reasoning_efforts
